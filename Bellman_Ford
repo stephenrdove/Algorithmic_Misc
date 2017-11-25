@@ -1,0 +1,42 @@
+def ShortestPath(paths, startingNodes, endingNodes):
+    result = 0
+    minList = list()
+    nodeList = list()
+    distList = list()
+    starts = len(startingNodes)
+    
+    # Put all starting nodes at the beginning of our array
+    for i in range(starts):
+        nodeList.append(startingNodes[i])
+    # Put all ending ndoes next in the array
+    for i in range(len(endingNodes)):
+        nodeList.append(endingNodes[i])
+    # Place the other intermediate nodes at the end of the array
+    for i in range(len(paths)):
+        if paths[i][0] not in nodeList:
+            nodeList.append(paths[i][0])
+        if paths[i][1] not in nodeList:
+            nodeList.append(paths[i][1])
+    
+    # Set up the distance list to store distances from ending nodes
+    distList=np.zeros(len(nodeList))
+    distList = distList + float("inf")
+    distList[starts:starts + len(endingNodes)] = 0
+    
+    # For the number of possible edges from a start node to an end node
+    for j in range(len(nodeList)-1):
+        # For each node in the array
+        for k in range(len(nodeList)):
+            # For each of the edges
+            for l in range(len(paths)):
+                # If a the node that we are looking for is the 
+                # starting node for an edge
+                if nodeList[k] == paths[l][0]:
+                    # If this weight is lower than the previous, replace it
+                    distList[k]=min(distList[k],paths[l][2]+distList[nodeList.index(paths[l][1])])
+
+        minList.append(min(distList[0:starts]))
+        
+    result = min(minList)
+
+    return result
