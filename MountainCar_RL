@@ -1,0 +1,46 @@
+# Using the AI Gym https://github.com/openai/gym/wiki/MountainCar-v0
+# This program uses Actor-Critic Deep Reinforcement Learning to solve the Mountain Car game
+# From the URL above, solving is considered an average reward of -110 over 100 continuous episodes
+# The program uses a combination of Python, NumPy, and TensorFlow libraries
+
+import gym
+import numpy as np
+import tensorflow as tf
+
+## TensorFlow
+#
+#
+##
+
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+
+# Running the episodes
+env = gym.make('MountainCar-v0')
+total_reward = []
+while (sum(total_reward)/100) < -110:
+  i += 1
+  hist = [[],[],[]]
+  st = env.reset()
+  for j in range(1000):
+    st = [st]
+    action_distribution = sess.run(output,feed_dict = {state: st})		
+    act = np.random.choice(3,p=action_distribution[0]) # select action randomly from actDist
+    st1,reward,done,_ = env.step(act) 
+    hist[0].append(st[0])
+    hist[1].append(act)
+    hist[2].append(reward)
+    st = st1
+    if done:
+      # Create Discounted Rewards array
+      dis_rs = [hist[2][len(hist[2]) - 1]]
+      len_hist = len(hist[2])
+      for k in range(len_hist-2,-1,-1):
+        dis_rs = [dis_rs[0] * gamma + hist[2][k]] + dis_rs			
+      sess.run(trainOp,feed_dict={state: hist[0], actions: hist[1], rewards: dis_rs})
+      if i >= 900:
+      total_reward[i%100] = j
+      break
+            
+mean_reward = sum(total_reward)/300.0
+print mean_reward
