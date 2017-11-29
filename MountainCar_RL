@@ -1,3 +1,5 @@
+## NOTE: Still working out some bugs to improve performance
+
 # Using the AI Gym https://github.com/openai/gym/wiki/MountainCar-v0
 # This program uses Actor-Critic Deep Reinforcement Learning to solve the Mountain Car game
 # From the URL above, solving is considered an average reward of -110 over 100 continuous episodes
@@ -7,40 +9,81 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-## TensorFlow
-#
-#
-##
+# HYPERPARAMETER - Discount Factor = 0.9999
+gamma = 0.99
+stateSz = 2
+hiddenSzA = 8
+hiddenSzC = 100
+
+state= tf.placeholder(shape=[None,stateSz],dtype=tf.float32)
+
+# Actor NN
+W =tf.Variable(tf.random_uniform([stateSz,hiddenSzA],dtype=tf.float32))
+b = tf.Variable(tf.random_uniform([hiddenSzA],dtype=tf.float32))
+hidden= tf.nn.relu(tf.matmul(state,W))+b
+O = tf.Variable(tf.random_uniform([hiddenSzA,2],dtype=tf.float32))
+Ob = tf.Variable(tf.random_uniform([2],dtype=tf.float32))
+output= tf.nn.softmax(tf.matmul(hidden,O)+Ob)
+
+rewards = tf.placeholder(shape=[None],dtype=tf.float32)
+actions = tf.placeholder(shape=[None],dtype=tf.int32)
+indicies = tf.range(0, tf.shape(output)[0]) * 2 + actions
+actProbs = tf.gather(tf.reshape(output, [-1]), indicies)
+loss = -tf.reduce_mean(tf.multiply(tf.log(actProbs),rewards))
+
+# Critic NN
+V1 = tf.Variable(tf.random_normal([stateSz,hiddenSzC],dtype=tf.float32,stddev=0.1))
+bV1 = tf.Variable(tf.random_normal([hiddenSzC],dtype=tf.float32,stddev=0.1))
+v1Hidden = tf.nn.relu(tf.matmul(state,V1)+bV1)
+V2 = tf.Variable(tf.random_normal([hiddenSzC,1],dtype=tf.float32,stddev=0.1))
+bV2 = tf.Variable(tf.random_normal([1],dtype=tf.float32,stddev=0.1))
+vOut = tf.matmul(v1Hidden,V2) + bV2
+vLoss=tf.reduce_mean(tf.square(rewards-vOut))
+comLoss = loss + vLoss
+
+optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+trainOp = optimizer.minimize(comLoss)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 # Running the episodes
 env = gym.make('MountainCar-v0')
-total_reward = []
-while (sum(total_reward)/100) < -110:
-  i += 1
-  hist = [[],[],[]]
-  st = env.reset()
-  for j in range(1000):
-    st = [st]
-    action_distribution = sess.run(output,feed_dict = {state: st})		
-    act = np.random.choice(3,p=action_distribution[0]) # select action randomly from actDist
-    st1,reward,done,_ = env.step(act) 
-    hist[0].append(st[0])
-    hist[1].append(act)
-    hist[2].append(reward)
-    st = st1
-    if done:
-      # Create Discounted Rewards array
-      dis_rs = [hist[2][len(hist[2]) - 1]]
-      len_hist = len(hist[2])
-      for k in range(len_hist-2,-1,-1):
-        dis_rs = [dis_rs[0] * gamma + hist[2][k]] + dis_rs			
-      sess.run(trainOp,feed_dict={state: hist[0], actions: hist[1], rewards: dis_rs})
-      if i >= 900:
-      total_reward[i%100] = j
-      break
-            
-mean_reward = sum(total_reward)/300.0
-print mean_reward
+total_reward = np.zeros(100) + np.inf
+i = 0
+
+while (sum(total_reward)/100) > 110:
+    i += 1
+    #print('Iteration {0:4} and Avg Reward: {1}'.format(i,sum(total_reward/100)))
+    hist = [[],[],[],[]]
+    st = env.reset()
+    j = 0
+    done = False
+    while not done:
+        j += 1
+        st = [st]
+        outV,action_distribution = sess.run([vOut,output],feed_dict = {state: st})		
+        act = np.random.choice(2,p=action_distribution[0]) # select action randomly from actDist
+        st1,reward,done,_ = env.step(act) 
+        hist[0].append(st[0]) # History of the states
+        hist[1].append(act) # History of the actions taken
+        hist[2].append(reward) # History of the rewards from the actions
+        hist[3].append(outV[0][0]) # History of the output of the critic NN
+        st = st1
+        # Train every 50 steps or when done
+        if j%50==0 or done:
+            len_hist = len(hist[2])
+            dis_rs = [hist[2][len_hist - 1]]
+            # Create Discounted Reward Array
+            for k in range(len_hist-2,-1,-1):
+                dis_rs = [dis_rs[0] * gamma + hist[2][k]] + dis_rs #-hist[3][k]
+            # Subtract the critic value for each timestep from the discounted rewards
+            for l in range(len_hist): dis_rs[l]-=hist[3][l]
+            ploss=sess.run([comLoss,trainOp],feed_dict={state: hist[0], actions: hist[1], rewards: dis_rs})
+            print ploss[0]
+    total_reward[i%100] = j
+
+
+print('Total Episodes: {0}'.format(i))
+print('Number of Episodes until solve: {0}'.format(i-100))
+
