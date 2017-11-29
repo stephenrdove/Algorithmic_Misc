@@ -9,40 +9,43 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-# HYPERPARAMETER - Discount Factor = 0.9999
+# HYPERPARAMETER - Discount Factor = 0.99
 gamma = 0.99
 stateSz = 2
-hiddenSzA = 8
+hiddenSzA = 100
 hiddenSzC = 100
+actionSz = 3
 
 state= tf.placeholder(shape=[None,stateSz],dtype=tf.float32)
+rewards = tf.placeholder(shape=[None],dtype=tf.float32)
+actions = tf.placeholder(shape=[None],dtype=tf.int32)
 
 # Actor NN
 W =tf.Variable(tf.random_uniform([stateSz,hiddenSzA],dtype=tf.float32))
 b = tf.Variable(tf.random_uniform([hiddenSzA],dtype=tf.float32))
 hidden= tf.nn.relu(tf.matmul(state,W))+b
-O = tf.Variable(tf.random_uniform([hiddenSzA,2],dtype=tf.float32))
-Ob = tf.Variable(tf.random_uniform([2],dtype=tf.float32))
-output= tf.nn.softmax(tf.matmul(hidden,O)+Ob)
-
-rewards = tf.placeholder(shape=[None],dtype=tf.float32)
-actions = tf.placeholder(shape=[None],dtype=tf.int32)
-indicies = tf.range(0, tf.shape(output)[0]) * 2 + actions
-actProbs = tf.gather(tf.reshape(output, [-1]), indicies)
-loss = -tf.reduce_mean(tf.multiply(tf.log(actProbs),rewards))
+V = tf.Variable(tf.random_uniform([hiddenSzA,actionSz],dtype=tf.float32))
+bV = tf.Variable(tf.random_uniform([actionSz],dtype=tf.float32))
+output= tf.nn.softmax(tf.matmul(hidden,V)+bV)
 
 # Critic NN
-V1 = tf.Variable(tf.random_normal([stateSz,hiddenSzC],dtype=tf.float32,stddev=0.1))
-bV1 = tf.Variable(tf.random_normal([hiddenSzC],dtype=tf.float32,stddev=0.1))
-v1Hidden = tf.nn.relu(tf.matmul(state,V1)+bV1)
-V2 = tf.Variable(tf.random_normal([hiddenSzC,1],dtype=tf.float32,stddev=0.1))
-bV2 = tf.Variable(tf.random_normal([1],dtype=tf.float32,stddev=0.1))
-vOut = tf.matmul(v1Hidden,V2) + bV2
-vLoss=tf.reduce_mean(tf.square(rewards-vOut))
-comLoss = loss + vLoss
+WCritic = tf.Variable(tf.random_normal([stateSz,hiddenSzC],dtype=tf.float32,stddev=0.1))
+bCritic = tf.Variable(tf.random_normal([hiddenSzC],dtype=tf.float32,stddev=0.1))
+v1Hidden = tf.nn.relu(tf.matmul(state,WCritic)+bCritic)
+VCritic = tf.Variable(tf.random_normal([hiddenSzC,1],dtype=tf.float32,stddev=0.1))
+bVCritic = tf.Variable(tf.random_normal([1],dtype=tf.float32,stddev=0.1))
+vOut = tf.matmul(v1Hidden,VCritic) + bVCritic
 
+# Calculating Loss
+indices = tf.range(0, tf.shape(output)[0]) * actionSz + actions
+actProbs = tf.gather(tf.reshape(output, [-1]), indices)
+lossActor = -tf.reduce_mean(tf.multiply(tf.log(actProbs),rewards))
+lossCritic = tf.reduce_mean(tf.square(rewards-vOut))
+combinedLoss = lossActor + lossCritic
+
+# Learning Rate = 0.001 w/ Adam Optimizer
 optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-trainOp = optimizer.minimize(comLoss)
+trainOp = optimizer.minimize(combinedLoss)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
